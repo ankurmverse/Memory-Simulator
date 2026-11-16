@@ -1,10 +1,10 @@
 # Page Replacement Simulator
 
-A small, trace-driven simulator that demonstrates how page-replacement decisions affect hits, page faults, and resident memory frames. This milestone includes FIFO, LRU, and CLOCK. Later milestones add workloads, benchmarking, machine learning, and a Streamlit demonstration.
+A small, trace-driven simulator that demonstrates how page-replacement decisions affect hits, page faults, and resident memory frames. It includes FIFO, LRU, and CLOCK policies, seeded synthetic workloads, and a CLI for reproducible comparisons. Later milestones add machine learning and a Streamlit demonstration.
 
 > This is an educational simulator. It does not modify or benchmark an operating-system memory manager.
 
-## Phase 3: reproducible traces and replacement policies
+## Phase 4: compare policies with the CLI
 
 The simulator accepts a sequence of integer page IDs, a positive frame capacity, and a replacement policy. It returns aggregate reference/hit/fault/eviction counts and, by default, an event record for each request.
 
@@ -31,6 +31,25 @@ assert loaded_trace == trace
 ```
 
 Each trace CSV has `reference_index,page` columns, with zero-based contiguous reference indexes. Its sibling JSON file (`same-name.json`) records the format version, workload, seed, length, and generation parameters. The reader checks the schema and rejects inconsistent indexes or reference counts. See the small [looping trace](examples/traces/looping.csv) and its [metadata](examples/traces/looping.json).
+
+Generate and persist a trace:
+
+```bash
+page-replacement generate --workload hot_set_noise --length 1000 --seed 42 \
+  --working-set-size 32 --hot-set-size 6 --noise-probability 0.15 \
+  --output data/traces/hot-set.csv
+```
+
+Compare all three policies on a generated trace (or pass `--trace path/to/file.csv` to use an existing trace). Results include faults, hits, evictions, fault rate, and hit rate. Metrics CSV and plot outputs are optional:
+
+```bash
+page-replacement compare --workload looping --length 1000 --seed 42 \
+  --working-set-size 8 --frames 4 --csv results/looping.csv
+python -m page_replacement compare --trace data/traces/hot-set.csv --frames 8 \
+  --policies fifo lru clock --plot results/hot-set.png
+```
+
+Plots use the optional Matplotlib dependency. Install it with `python -m pip install -e ".[plots]"`; simulations and CSV export need no plotting dependency. The CLI can also be run from a source checkout with `python -m page_replacement`.
 
 ### Install
 
@@ -71,14 +90,14 @@ For this trace, FIFO has **2 hits, 4 faults, and 1 eviction**; LRU has **1 hit a
 
 ## Eight-phase GitHub plan
 
-Each phase is intended to be tested and pushed as a separate milestone. Future phases are not included in this Phase 1 code.
+Each phase is intended to be tested and pushed as a separate milestone. Future phases are not included in this Phase 4 code.
 
 | Phase | Scope | Status |
 |---|---|---|
 | 1 | Project setup, simulator contract, FIFO, core tests, starter documentation | Complete |
 | 2 | LRU and CLOCK policies, victim-order and edge-case tests | Complete |
-| 3 | Seeded synthetic workloads and trace CSV/metadata format | Current |
-| 4 | CLI for simulation/comparison, metrics, CSV output, and benchmark plots | Planned |
+| 3 | Seeded synthetic workloads and trace CSV/metadata format | Complete |
+| 4 | CLI for simulation/comparison, metrics, CSV output, and benchmark plots | Current |
 | 5 | Causal ML feature definitions and next-use training labels | Planned |
 | 6 | Random-forest training, saved model, learned policy, held-out evaluation | Planned |
 | 7 | Streamlit walkthrough, policy comparisons, per-eviction ML feature display | Planned |

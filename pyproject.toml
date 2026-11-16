@@ -12,6 +12,10 @@ dependencies = []
 
 [project.optional-dependencies]
 dev = ["pytest>=8,<9"]
+plots = ["matplotlib>=3.8"]
+
+[project.scripts]
+page-replacement = "page_replacement.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
@@ -19,4 +23,3 @@ where = ["src"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 pythonpath = ["src"]
-
