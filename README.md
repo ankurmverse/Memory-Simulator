@@ -1,10 +1,10 @@
 # Page Replacement Simulator
 
-A small, trace-driven simulator that demonstrates how page-replacement decisions affect hits, page faults, and resident memory frames. It includes FIFO, LRU, and CLOCK policies, seeded synthetic workloads, and a CLI for reproducible comparisons. Later milestones add machine learning and a Streamlit demonstration.
+A small, trace-driven simulator that demonstrates how page-replacement decisions affect hits, page faults, and resident memory frames. It includes FIFO, LRU, and CLOCK policies, seeded synthetic workloads, a CLI for reproducible comparisons, and causal ML training samples. Later milestones add model training and a Streamlit demonstration.
 
 > This is an educational simulator. It does not modify or benchmark an operating-system memory manager.
 
-## Phase 4: compare policies with the CLI
+## Phase 5: causal features and next-use labels
 
 The simulator accepts a sequence of integer page IDs, a positive frame capacity, and a replacement policy. It returns aggregate reference/hit/fault/eviction counts and, by default, an event record for each request.
 
@@ -31,6 +31,31 @@ assert loaded_trace == trace
 ```
 
 Each trace CSV has `reference_index,page` columns, with zero-based contiguous reference indexes. Its sibling JSON file (`same-name.json`) records the format version, workload, seed, length, and generation parameters. The reader checks the schema and rejects inconsistent indexes or reference counts. See the small [looping trace](examples/traces/looping.csv) and its [metadata](examples/traces/looping.json).
+
+For every fault that requires eviction, feature engineering creates one sample per currently resident candidate. The numeric features describe only the prefix before that decision:
+
+- `access_count`: candidate references observed so far.
+- `references_since_last_access`: distance from its most recent prior reference.
+- `last_reuse_distance`, `mean_reuse_distance`, `max_reuse_distance`: statistics over observed gaps between consecutive references.
+- `residency_age`: references since the candidate entered memory.
+
+The offline training label `next_use_distance` is the number of references from the fault decision to the candidate's next occurrence. `None` means it is never referenced again in the available trace. This future-derived label is for training/evaluation only; it is not an input feature available to an online policy.
+
+```python
+from page_replacement.features import build_candidate_samples
+from page_replacement.policies import LRUPolicy
+from page_replacement.traces import read_trace
+
+trace = read_trace("examples/traces/looping.csv")
+samples = build_candidate_samples(trace.pages, frame_capacity=2, policy=LRUPolicy())
+for sample in samples[:3]:
+    print(
+        sample.reference_index,
+        sample.candidate_page,
+        sample.features,
+        sample.next_use_distance,
+    )
+```
 
 Generate and persist a trace:
 
@@ -90,15 +115,15 @@ For this trace, FIFO has **2 hits, 4 faults, and 1 eviction**; LRU has **1 hit a
 
 ## Eight-phase GitHub plan
 
-Each phase is intended to be tested and pushed as a separate milestone. Future phases are not included in this Phase 4 code.
+Each phase is intended to be tested and pushed as a separate milestone. Future phases are not included in this Phase 5 code.
 
 | Phase | Scope | Status |
 |---|---|---|
 | 1 | Project setup, simulator contract, FIFO, core tests, starter documentation | Complete |
 | 2 | LRU and CLOCK policies, victim-order and edge-case tests | Complete |
 | 3 | Seeded synthetic workloads and trace CSV/metadata format | Complete |
-| 4 | CLI for simulation/comparison, metrics, CSV output, and benchmark plots | Current |
-| 5 | Causal ML feature definitions and next-use training labels | Planned |
+| 4 | CLI for simulation/comparison, metrics, CSV output, and benchmark plots | Complete |
+| 5 | Causal feature engineering and next-use training labels | Current |
 | 6 | Random-forest training, saved model, learned policy, held-out evaluation | Planned |
 | 7 | Streamlit walkthrough, policy comparisons, per-eviction ML feature display | Planned |
 | 8 | Final documentation, CI, packaging/release polish, measured demo/resume results | Planned |
