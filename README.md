@@ -4,13 +4,33 @@ A small, trace-driven simulator that demonstrates how page-replacement decisions
 
 > This is an educational simulator. It does not modify or benchmark an operating-system memory manager.
 
-## Phase 2: FIFO, LRU, and CLOCK
+## Phase 3: reproducible traces and replacement policies
 
 The simulator accepts a sequence of integer page IDs, a positive frame capacity, and a replacement policy. It returns aggregate reference/hit/fault/eviction counts and, by default, an event record for each request.
 
 - **FIFO** evicts the resident page loaded earliest. A hit does not change FIFO order.
 - **LRU** evicts the resident page whose most recent reference was earliest. Hits update recency.
 - **CLOCK** approximates LRU with a circular hand and reference bits. A page with its bit set gets a second chance: CLOCK clears the bit and advances; the first page later encountered with a clear bit is evicted. A loaded or hit page has its reference bit set.
+
+The trace generator provides five workloads: sequential scans, repeating loops, Zipf-skewed requests, hot-set traffic with configurable noise, and two disjoint phases. Pass the same seed and parameters to reproduce a generated trace.
+
+```python
+from page_replacement.traces import generate_trace, read_trace, write_trace
+
+trace = generate_trace(
+    "hot_set_noise",
+    length=1_000,
+    seed=42,
+    working_set_size=32,
+    hot_set_size=6,
+    noise_probability=0.15,
+)
+csv_path, metadata_path = write_trace(trace, "data/traces/hot-set.csv")
+loaded_trace = read_trace(csv_path)
+assert loaded_trace == trace
+```
+
+Each trace CSV has `reference_index,page` columns, with zero-based contiguous reference indexes. Its sibling JSON file (`same-name.json`) records the format version, workload, seed, length, and generation parameters. The reader checks the schema and rejects inconsistent indexes or reference counts. See the small [looping trace](examples/traces/looping.csv) and its [metadata](examples/traces/looping.json).
 
 ### Install
 
@@ -56,8 +76,8 @@ Each phase is intended to be tested and pushed as a separate milestone. Future p
 | Phase | Scope | Status |
 |---|---|---|
 | 1 | Project setup, simulator contract, FIFO, core tests, starter documentation | Complete |
-| 2 | LRU and CLOCK policies, victim-order and edge-case tests | Current |
-| 3 | Seeded synthetic workloads and trace CSV/metadata format | Planned |
+| 2 | LRU and CLOCK policies, victim-order and edge-case tests | Complete |
+| 3 | Seeded synthetic workloads and trace CSV/metadata format | Current |
 | 4 | CLI for simulation/comparison, metrics, CSV output, and benchmark plots | Planned |
 | 5 | Causal ML feature definitions and next-use training labels | Planned |
 | 6 | Random-forest training, saved model, learned policy, held-out evaluation | Planned |

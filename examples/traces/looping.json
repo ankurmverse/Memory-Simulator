@@ -1,0 +1,9 @@
+{
+  "format_version": 1,
+  "length": 12,
+  "parameters": {
+    "working_set_size": 3
+  },
+  "seed": 7,
+  "workload": "looping"
+}
