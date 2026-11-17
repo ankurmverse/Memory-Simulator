@@ -75,6 +75,42 @@ def _build_parser() -> argparse.ArgumentParser:
     )
     compare.add_argument("--csv", type=Path, help="write metrics to this CSV path")
     compare.add_argument("--plot", type=Path, help="save a fault-rate comparison plot")
+
+    train = commands.add_parser("train", help="train and save the learned policy model")
+    train.add_argument(
+        "--workloads",
+        nargs="+",
+        choices=("sequential", "looping", "zipf", "hot_set_noise", "phase_change"),
+        default=("looping", "zipf", "hot_set_noise", "phase_change"),
+    )
+    train.add_argument("--seeds", nargs="+", type=int, default=(0, 1, 2, 3))
+    train.add_argument("--length", type=int, default=2_000)
+    train.add_argument("--working-set-size", type=int, default=16)
+    train.add_argument("--frames", type=int, default=4)
+    train.add_argument("--trees", type=int, default=100)
+    train.add_argument("--model", type=Path, default=Path("models/reuse-distance.joblib"))
+
+    evaluate = commands.add_parser(
+        "evaluate", help="evaluate the learned policy on a separate trace"
+    )
+    eval_source = evaluate.add_mutually_exclusive_group(required=True)
+    eval_source.add_argument(
+        "--trace", type=Path, help="held-out trace CSV with adjacent JSON metadata"
+    )
+    eval_source.add_argument(
+        "--workload",
+        choices=("sequential", "looping", "zipf", "hot_set_noise", "phase_change"),
+        help="generate a held-out workload trace",
+    )
+    evaluate.add_argument("--model", type=Path, required=True)
+    evaluate.add_argument("--length", type=int, default=2_000)
+    evaluate.add_argument("--seed", type=int, default=100)
+    evaluate.add_argument("--working-set-size", type=int, default=16)
+    evaluate.add_argument("--hot-set-size", type=int)
+    evaluate.add_argument("--noise-probability", type=float, default=0.1)
+    evaluate.add_argument("--frames", type=int, default=4)
+    evaluate.add_argument("--csv", type=Path, help="write metrics to this CSV path")
+    evaluate.add_argument("--plot", type=Path, help="save a fault-rate comparison plot")
     return parser
 
 
@@ -179,6 +215,58 @@ def _compare(args: argparse.Namespace) -> int:
     return 0
 
 
+def _train(args: argparse.Namespace) -> int:
+    from page_replacement.model import train_model
+
+    traces = [
+        generate_trace(
+            workload,
+            length=args.length,
+            seed=seed,
+            working_set_size=args.working_set_size,
+        )
+        for workload in args.workloads
+        for seed in args.seeds
+    ]
+    summary = train_model(
+        traces,
+        args.frames,
+        args.model,
+        n_estimators=args.trees,
+    )
+    print(f"Training samples: {summary.sample_count}")
+    print(f"Eviction decisions: {summary.eviction_decisions}")
+    print(f"Never-used labels: {summary.never_reused_fraction:.1%}")
+    print(f"Model: {args.model}")
+    print("Feature importance:")
+    for name, importance in summary.feature_importances:
+        print(f"  {name}: {importance:.4f}")
+    return 0
+
+
+def _evaluate(args: argparse.Namespace) -> int:
+    from page_replacement.model import evaluate_learned_policy
+
+    trace = (
+        read_trace(args.trace)
+        if args.trace is not None
+        else _generate(args)
+    )
+    results = evaluate_learned_policy(trace.pages, args.frames, args.model)
+    rows = [
+        _metric_row(trace, name, args.frames, result)
+        for name, result in results.items()
+    ]
+    _print_metrics(rows)
+    if args.csv is not None:
+        _write_metrics(args.csv, rows)
+        print(f"Metrics CSV: {args.csv}")
+    if args.plot is not None:
+        _write_plot(args.plot, rows)
+        print(f"Fault-rate plot: {args.plot}")
+    return 0
+
+
 def main(argv: Sequence[str] | None = None) -> int:
     """Run the CLI and return a process exit code."""
     parser = _build_parser()
@@ -190,8 +278,12 @@ def main(argv: Sequence[str] | None = None) -> int:
             print(f"Generated {len(trace.pages)} references: {csv_path}")
             print(f"Metadata: {metadata_path}")
             return 0
-        return _compare(args)
-    except (OSError, ValueError) as error:
+        if args.command == "compare":
+            return _compare(args)
+        if args.command == "train":
+            return _train(args)
+        return _evaluate(args)
+    except (ImportError, OSError, ValueError) as error:
         parser.error(str(error))
     return 2
 

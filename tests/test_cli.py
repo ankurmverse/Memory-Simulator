@@ -114,3 +114,62 @@ def test_invalid_arguments_are_reported_by_argparse(capsys):
 
     assert error.value.code == 2
     assert "positive integer" in capsys.readouterr().err
+
+
+def test_train_and_held_out_evaluate_commands(tmp_path, capsys):
+    pytest.importorskip("sklearn")
+    pytest.importorskip("joblib")
+    model_path = tmp_path / "reuse.joblib"
+    metrics_path = tmp_path / "held-out.csv"
+
+    assert main(
+        [
+            "train",
+            "--workloads",
+            "looping",
+            "zipf",
+            "--seeds",
+            "0",
+            "1",
+            "--length",
+            "120",
+            "--working-set-size",
+            "7",
+            "--frames",
+            "3",
+            "--trees",
+            "8",
+            "--model",
+            str(model_path),
+        ]
+    ) == 0
+    train_output = capsys.readouterr().out
+    assert "Training samples:" in train_output
+    assert "Feature importance:" in train_output
+    assert model_path.exists()
+
+    assert main(
+        [
+            "evaluate",
+            "--model",
+            str(model_path),
+            "--workload",
+            "hot_set_noise",
+            "--seed",
+            "100",
+            "--length",
+            "120",
+            "--working-set-size",
+            "7",
+            "--frames",
+            "3",
+            "--csv",
+            str(metrics_path),
+        ]
+    ) == 0
+    evaluate_output = capsys.readouterr().out
+    assert all(name in evaluate_output for name in ("FIFO", "LRU", "CLOCK", "ML"))
+    with metrics_path.open(newline="") as file:
+        rows = list(csv.DictReader(file))
+    assert [row["policy"] for row in rows] == ["fifo", "lru", "clock", "ml"]
+    assert {row["seed"] for row in rows} == {"100"}

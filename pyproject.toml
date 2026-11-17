@@ -13,6 +13,7 @@ dependencies = []
 [project.optional-dependencies]
 dev = ["pytest>=8,<9"]
 plots = ["matplotlib>=3.8"]
+ml = ["scikit-learn>=1.4", "joblib>=1.3"]
 
 [project.scripts]
 page-replacement = "page_replacement.cli:main"
