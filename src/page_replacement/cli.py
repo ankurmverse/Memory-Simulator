@@ -88,7 +88,9 @@ def _build_parser() -> argparse.ArgumentParser:
     train.add_argument("--working-set-size", type=int, default=16)
     train.add_argument("--frames", type=int, default=4)
     train.add_argument("--trees", type=int, default=100)
-    train.add_argument("--model", type=Path, default=Path("models/reuse-distance.joblib"))
+    train.add_argument(
+        "--model", type=Path, default=Path("models/reuse-distance-v1.joblib")
+    )
 
     evaluate = commands.add_parser(
         "evaluate", help="evaluate the learned policy on a separate trace"

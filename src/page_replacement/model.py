@@ -9,6 +9,7 @@ from typing import Protocol, Sequence
 
 from page_replacement.features import (
     CausalFeatureHistory,
+    CandidateFeatures,
     CandidateSample,
     feature_vector,
 )
@@ -38,6 +39,21 @@ class TrainingSummary:
     eviction_decisions: int
     never_reused_fraction: float
     feature_importances: tuple[tuple[str, float], ...]
+
+
+@dataclass(frozen=True)
+class CandidatePrediction:
+    page: int
+    features: CandidateFeatures
+    predicted_next_use_distance: float
+
+
+@dataclass(frozen=True)
+class PolicyDecision:
+    reference_index: int
+    incoming_page: int
+    victim_page: int
+    candidates: tuple[CandidatePrediction, ...]
 
 
 def _require_ml_dependencies():
@@ -163,9 +179,12 @@ class LearnedReplacementPolicy:
         self._history = CausalFeatureHistory()
         self._resident_since: dict[int, int] = {}
         self._reference_index = 0
+        self._last_accessed_page: int | None = None
+        self.decisions: list[PolicyDecision] = []
 
     def on_access(self, page: int) -> None:
         self._history.record_access(page, self._reference_index)
+        self._last_accessed_page = page
         self._reference_index += 1
 
     def on_load(self, page: int) -> None:
@@ -198,7 +217,28 @@ class LearnedReplacementPolicy:
         scores = [float(prediction) for prediction in predictions]
         if any(not math.isfinite(score) for score in scores):
             raise RuntimeError("model returned a non-finite next-use prediction")
-        return resident_pages[max(range(len(scores)), key=scores.__getitem__)]
+        victim_index = max(range(len(scores)), key=scores.__getitem__)
+        victim_page = resident_pages[victim_index]
+        if self._last_accessed_page is None:
+            raise RuntimeError("learned policy has no current page reference")
+        self.decisions.append(
+            PolicyDecision(
+                reference_index=decision_index,
+                incoming_page=self._last_accessed_page,
+                victim_page=victim_page,
+                candidates=tuple(
+                    CandidatePrediction(
+                        page=page,
+                        features=candidate_features,
+                        predicted_next_use_distance=score,
+                    )
+                    for page, candidate_features, score in zip(
+                        resident_pages, features, scores
+                    )
+                ),
+            )
+        )
+        return victim_page
 
 
 def load_model(model_path: str | Path) -> LearnedReplacementPolicy:

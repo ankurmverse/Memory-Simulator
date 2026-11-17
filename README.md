@@ -11,7 +11,7 @@ A trace-driven simulator for exploring how memory page replacement affects hits,
 - Save and reload traces as CSV with JSON metadata.
 - Compare policies with hit/fault statistics, CSV reports, and optional plots.
 - Train a random-forest policy from causal access-history features and evaluate it on held-out traces.
-- Inspect per-reference simulation events and the learned model's feature importances.
+- Explore per-reference frame contents, learned eviction decisions, and model feature importances in an interactive Streamlit app.
 
 ## Install
 
@@ -21,10 +21,10 @@ Requires Python 3.11 or newer:
 python3.11 -m venv .venv
 source .venv/bin/activate
 python -m pip install --upgrade pip
-python -m pip install -e ".[dev,ml,plots]"
+python -m pip install -e ".[dev,ml,plots,app]"
 ```
 
-The `ml` and `plots` extras are optional. For simulation and CSV output only:
+The `ml`, `plots`, and `app` extras are optional. For simulation and CSV output only:
 
 ```bash
 python -m pip install -e ".[dev]"
@@ -44,6 +44,15 @@ page-replacement compare --trace data/traces/hot-set.csv --frames 8 \
 
 The generated CSV contains `reference_index,page` columns. Its same-name JSON file stores the format version, workload, seed, length, and generation parameters. The plot option requires Matplotlib; CSV reports do not.
 
+## Interactive Streamlit app
+
+```bash
+streamlit run src/page_replacement/streamlit_app.py
+```
+
+Install the `app` extra first if Streamlit is not already installed.
+Choose a workload, seed, and frame count to compare FIFO, LRU, and CLOCK. Train a model from the app to include the learned policy, inspect the frame state at any reference, and see the historical candidate features and predicted-versus-actual next-use distance behind each ML eviction. The actual future distance is displayed only as an explanation; the online policy does not use it.
+
 ## Train and evaluate the learned policy
 
 Training and evaluation require the `ml` extra. Training defaults to several workload families and seeds. Evaluation uses a different seed by default; keep it separate from the training seeds for a meaningful held-out result.
@@ -51,9 +60,9 @@ Training and evaluation require the `ml` extra. Training defaults to several wor
 ```bash
 page-replacement train --workloads looping zipf hot_set_noise phase_change \
   --seeds 0 1 2 3 --length 2000 --working-set-size 16 --frames 4 \
-  --model models/reuse-distance.joblib
+  --model models/reuse-distance-v1.joblib
 
-page-replacement evaluate --model models/reuse-distance.joblib \
+page-replacement evaluate --model models/reuse-distance-v1.joblib \
   --workload hot_set_noise --seed 100 --length 2000 \
   --working-set-size 16 --frames 4 --csv results/held-out.csv \
   --plot results/held-out.png
