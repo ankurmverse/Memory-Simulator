@@ -63,6 +63,17 @@ streamlit run src/page_replacement/streamlit_app.py
 Install the `app` extra first if Streamlit is not already installed.
 Choose a workload, seed, and frame count to compare FIFO, LRU, and CLOCK. Train a model from the app to include the learned policy, inspect the frame state at any reference, and see the historical candidate features and predicted-versus-actual next-use distance behind each ML eviction. The actual future distance is displayed only as an explanation; the online policy does not use it.
 
+### Deploy to Streamlit Community Cloud
+
+The repository includes a root-level `requirements.txt` for the hosted app. To publish it:
+
+1. Push the repository to GitHub.
+2. Sign in at [share.streamlit.io](https://share.streamlit.io) with GitHub and select **Create app**.
+3. Choose repository `ankurmverse/Memory-Simulator`, branch `main`, and main file path `src/page_replacement/streamlit_app.py`.
+4. In **Advanced settings**, choose Python 3.12, then deploy.
+
+The app does not require secrets. The model trained in the dashboard is saved in the app's local runtime; hosted files are not a durable model store, so retrain after a restart or redeployment. To retain a trained model permanently, use external persistent storage or train and evaluate locally.
+
 ## Train and evaluate the learned policy
 
 Training and evaluation require the `ml` extra. Training defaults to several workload families and seeds. Evaluation uses a different seed by default; keep it separate from the training seeds for a meaningful held-out result.
