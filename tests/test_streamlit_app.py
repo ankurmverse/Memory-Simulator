@@ -14,7 +14,8 @@ APP_PATH = (
 )
 
 
-def test_dashboard_renders_comparison_and_walkthrough():
+def test_dashboard_renders_comparison_and_walkthrough(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
     app = AppTest.from_file(str(APP_PATH), default_timeout=20).run()
 
     assert not app.exception
@@ -24,7 +25,8 @@ def test_dashboard_renders_comparison_and_walkthrough():
     assert len(app.metric) == 3
 
 
-def test_dashboard_can_change_workload_and_reference():
+def test_dashboard_can_change_workload_and_reference(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
     app = AppTest.from_file(str(APP_PATH), default_timeout=20).run()
     app.selectbox(key="workload").select("looping").run()
     app.slider(key="reference_select").set_value(5).run()
@@ -34,11 +36,12 @@ def test_dashboard_can_change_workload_and_reference():
     assert app.slider(key="reference_select").value == 5
 
 
-def test_dashboard_shows_learned_eviction_explanation(tmp_path):
+def test_dashboard_shows_learned_eviction_explanation(tmp_path, monkeypatch):
     pytest.importorskip("sklearn")
     from page_replacement.model import train_model
     from page_replacement.traces import generate_trace
 
+    monkeypatch.chdir(tmp_path)
     model_path = tmp_path / "reuse.joblib"
     train_model(
         [
@@ -58,8 +61,9 @@ def test_dashboard_shows_learned_eviction_explanation(tmp_path):
     assert any("Actual next use (future)" in str(frame.value) for frame in app.dataframe)
 
 
-def test_dashboard_can_train_a_model_from_the_expander(tmp_path):
+def test_dashboard_can_train_a_model_from_the_expander(tmp_path, monkeypatch):
     pytest.importorskip("sklearn")
+    monkeypatch.chdir(tmp_path)
     model_path = tmp_path / "trained.joblib"
     app = AppTest.from_file(str(APP_PATH), default_timeout=30).run()
     app.text_input[0].set_value("0")

@@ -13,6 +13,16 @@ A trace-driven simulator for exploring how memory page replacement affects hits,
 - Train a random-forest policy from causal access-history features and evaluate it on held-out traces.
 - Explore per-reference frame contents, learned eviction decisions, and model feature importances in an interactive Streamlit app.
 
+## Screenshots
+
+The app compares policies on the same generated reference string and lets you inspect individual memory states:
+
+![Page Replacement Lab comparing FIFO, LRU, and CLOCK](docs/screenshots/policy-comparison.png)
+
+After training a model, select an eviction decision to see its candidate features and predicted next-use distances alongside the actual future reference for explanation:
+
+![Learned replacement policy eviction explanation](docs/screenshots/learned-eviction.png)
+
 ## Install
 
 Requires Python 3.11 or newer:
