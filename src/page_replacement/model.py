@@ -13,7 +13,12 @@ from page_replacement.features import (
     CandidateSample,
     feature_vector,
 )
-from page_replacement.policies import CLOCKPolicy, FIFOPolicy, LRUPolicy
+from page_replacement.policies import (
+    CLOCKPolicy,
+    FIFOPolicy,
+    LRUPolicy,
+    PolicyComplexity,
+)
 from page_replacement.traces import SyntheticTrace
 
 MODEL_FORMAT_VERSION = 1
@@ -181,6 +186,20 @@ class LearnedReplacementPolicy:
         self._reference_index = 0
         self._last_accessed_page: int | None = None
         self.decisions: list[PolicyDecision] = []
+
+    @property
+    def complexity(self) -> PolicyComplexity:
+        return PolicyComplexity(
+            hit="O(1) average",
+            fault_without_eviction="O(1) average",
+            fault_with_eviction="O(f × model prediction)",
+            extra_space="O(u + f + e × f + model size)",
+            data_structure="Hash maps + causal history + random forest",
+            tradeoff=(
+                "Inference scores every resident candidate and retains decision "
+                "details for explanation; cost depends on model size."
+            ),
+        )
 
     def on_access(self, page: int) -> None:
         self._history.record_access(page, self._reference_index)

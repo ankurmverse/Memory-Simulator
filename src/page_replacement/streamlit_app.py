@@ -8,6 +8,7 @@ import re
 
 import streamlit as st
 
+from page_replacement.analysis import sweep_frame_capacities
 from page_replacement.model import (
     PolicyDecision,
     TrainingSummary,
@@ -30,6 +31,23 @@ _BASELINE_POLICIES = {
     "LRU": LRUPolicy,
     "CLOCK": CLOCKPolicy,
 }
+
+
+@st.cache_data(show_spinner=False)
+def _cached_capacity_sweep(
+    trace_pages: tuple[int, ...], max_frames: int
+) -> tuple[dict[str, int | str | float], ...]:
+    return tuple(
+        {
+            "Policy": point.policy.upper(),
+            "Frames": point.frame_capacity,
+            "Page faults": point.faults,
+            "Fault rate": point.fault_rate,
+        }
+        for point in sweep_frame_capacities(
+            trace_pages, max_frames, _BASELINE_POLICIES
+        )
+    )
 
 
 def _show_training_summary(summary: TrainingSummary) -> None:
@@ -360,6 +378,48 @@ def main() -> None:
         x="Policy",
         y="Page faults",
     )
+
+    st.subheader("Memory-capacity what-if")
+    max_sweep_frames = st.slider(
+        "Maximum frames to compare",
+        min_value=2,
+        max_value=32,
+        value=16,
+        step=2,
+        key="capacity_sweep_max_frames",
+    )
+    sweep_rows = _cached_capacity_sweep(trace_pages, max_sweep_frames)
+    st.line_chart(
+        sweep_rows,
+        x="Frames",
+        y="Page faults",
+        color="Policy",
+    )
+    st.caption(
+        "Shows how classic-policy faults change as memory grows. FIFO can exhibit "
+        "Belady’s anomaly, where adding a frame increases faults. Try the classic "
+        "trace 1, 2, 3, 4, 1, 2, 5, 1, 2, 3, 4, 5 in the custom trace box."
+    )
+
+    st.subheader("Algorithm and system trade-offs")
+    st.caption(
+        "Asymptotic costs for policy bookkeeping, where f is the number of frames. "
+        "The simulator’s own validation, frame-list updates, and optional event "
+        "recording are not included; hash-table costs are average-case."
+    )
+    complexity_rows = [
+        {
+            "Policy": name,
+            "Hit": result.policy_complexity.hit,
+            "Fault, free frame": result.policy_complexity.fault_without_eviction,
+            "Fault, full memory": result.policy_complexity.fault_with_eviction,
+            "Extra space": result.policy_complexity.extra_space,
+            "Data structure": result.policy_complexity.data_structure,
+            "Trade-off": result.policy_complexity.tradeoff,
+        }
+        for name, result in results.items()
+    ]
+    st.dataframe(complexity_rows, hide_index=True, width="stretch")
 
     _render_walkthrough(trace_pages, trace_label, results, trace_pages)
 

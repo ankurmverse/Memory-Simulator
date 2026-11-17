@@ -16,6 +16,13 @@ def test_fifo_hand_checked_fault_count_and_resident_state():
     assert result.events[4].resident_pages == (2, 3, 4)
 
 
+def test_simulation_result_includes_policy_complexity():
+    result = simulate([1, 2, 1, 3], 2, CLOCKPolicy(), record_events=False)
+
+    assert result.policy_complexity.hit == "O(1) average"
+    assert result.policy_complexity.fault_with_eviction == "O(f) worst case"
+
+
 def test_lru_hit_changes_the_next_victim():
     result = simulate([1, 2, 3, 1, 4, 2], 3, LRUPolicy())
 

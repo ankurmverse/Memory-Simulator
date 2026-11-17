@@ -8,7 +8,7 @@ An interactive, trace-driven simulator that shows how operating-system page repl
 
 A program requests pages in a particular order, called a **reference string**. If the requested page is already in one of the available **memory frames**, it is a hit. Otherwise, a page fault occurs. If all frames are occupied, the replacement policy chooses a resident page to evict.
 
-The simulator makes those decisions visible one request at a time, then summarizes the hits, page faults, and evictions for each policy.
+The simulator makes those decisions visible one request at a time, then summarizes the hits, page faults, and evictions for each policy. It also compares how policy behavior changes as memory capacity grows and explains the underlying algorithmic costs.
 
 ### Replacement policies
 
@@ -38,6 +38,10 @@ Step through a looping workload and see the requested page, eviction, current fr
 Inspect the learned policy's candidate features and predicted next-use distances for an eviction:
 
 ![Learned replacement policy eviction explanation](docs/screenshots/learned-eviction.png)
+
+Explore capacity sensitivity, FIFO's Belady's anomaly, and the algorithmic trade-off table:
+
+![Memory-capacity sweep and policy complexity comparison](docs/screenshots/capacity-analysis.png)
 
 ## Get started
 
@@ -84,8 +88,23 @@ python -m streamlit run src/page_replacement/streamlit_app.py
 - Enter your own comma- or space-separated page IDs in **Custom page-reference trace** (up to 500 IDs).
 - Train a model in the app to add the learned policy to the comparison.
 - Review the learned policy's eviction candidates, historical features, and predicted next-use distances.
+- Use **Memory-capacity what-if** to compare page faults across frame counts. The classic trace `1, 2, 3, 4, 1, 2, 5, 1, 2, 3, 4, 5` demonstrates Belady's anomaly in FIFO: 9 faults with 3 frames and 10 with 4.
+- Review **Algorithm and system trade-offs** for each policy's hit/miss complexity, extra space, underlying data structure, and practical trade-off.
 
 The actual future next-use distance is displayed only to explain model predictions. It is not available to the policy while it is making an online eviction decision.
+
+### Complexity and interpretation
+
+Let `f` be the number of frames, `u` the number of distinct pages seen, and `e` the number of learned-policy eviction decisions. The policy complexity panel describes the data structures and average-case hash-table costs; learned-policy inference also depends on the trained forest. These are asymptotic costs, not wall-clock benchmarks. The simulator's resident-list updates, validation, and optional event recording add overhead, so benchmark runtime separately before making performance claims.
+
+| Policy | Hit | Fault with full memory | Policy state |
+| --- | --- | --- | --- |
+| FIFO | `O(1)` | `O(1)` | `O(f)` deque |
+| LRU | `O(1)` average | `O(1)` average | `O(f)` ordered hash map |
+| CLOCK | `O(1)` average | `O(f)` worst case | `O(f)` circular arrays and page-index map |
+| Learned | `O(1)` average | `O(f × model prediction)` | `O(u + f + e × f + model size)` |
+
+CLOCK trades a potentially linear scan for lower recency bookkeeping than exact LRU. FIFO and LRU use constant-time policy operations here, while the simulator itself still updates a Python resident list on eviction.
 
 ## Generate a trace and compare policies
 
@@ -147,6 +166,6 @@ python -m pytest
 
 ## Project layout
 
-- `src/page_replacement/` — simulator, policies, trace generators, CLI, model, and Streamlit app.
+- `src/page_replacement/` — simulator, policies, trace generators, capacity analysis, CLI, model, and Streamlit app.
 - `tests/` — tests for simulation, policies, traces, the model, CLI, and app.
 - `docs/screenshots/` — screenshots of the interactive app.

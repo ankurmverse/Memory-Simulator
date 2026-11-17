@@ -1,4 +1,6 @@
 .env
+.env.*
+!.env.example
 .venv/
 __pycache__/
 .pytest_cache/
@@ -6,8 +8,15 @@ __pycache__/
 *.egg-info/
 .DS_Store
 .coverage
+.coverage.*
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+.tox/
+.nox/
 build/
 dist/
+.streamlit/secrets.toml
 data/
 models/
 results/

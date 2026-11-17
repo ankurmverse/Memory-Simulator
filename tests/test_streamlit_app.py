@@ -21,6 +21,10 @@ def test_dashboard_renders_comparison_and_walkthrough(tmp_path, monkeypatch):
     assert not app.exception
     assert app.title[0].value == "Page Replacement Lab"
     assert any("Compare the policies" in item.value for item in app.subheader)
+    assert any("Memory-capacity what-if" in item.value for item in app.subheader)
+    assert any(
+        "Algorithm and system trade-offs" in item.value for item in app.subheader
+    )
     assert any("Walk through memory" in item.value for item in app.subheader)
     assert [item.label for item in app.metric[:3]] == [
         "FIFO page faults",

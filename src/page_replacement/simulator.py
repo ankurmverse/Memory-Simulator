@@ -5,7 +5,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Sequence
 
-from page_replacement.policies import ReplacementPolicy
+from page_replacement.policies import PolicyComplexity, ReplacementPolicy
 
 
 @dataclass(frozen=True)
@@ -28,6 +28,7 @@ class SimulationResult:
     faults: int
     evictions: int
     events: tuple[ReferenceEvent, ...]
+    policy_complexity: PolicyComplexity
 
     @property
     def fault_rate(self) -> float:
@@ -90,5 +91,6 @@ def simulate(
         faults=faults,
         evictions=evictions,
         events=tuple(events),
+        policy_complexity=policy.complexity,
     )
 

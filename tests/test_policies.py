@@ -84,6 +84,23 @@ def test_clock_hit_sets_reference_bit_and_hand_advances_after_eviction():
     assert policy.choose_victim((2, 3, 4)) == 3
 
 
+def test_policies_expose_complexity_and_storage_tradeoffs():
+    fifo = FIFOPolicy().complexity
+    lru = LRUPolicy().complexity
+    clock = CLOCKPolicy().complexity
+
+    assert (fifo.hit, fifo.fault_with_eviction, fifo.extra_space) == (
+        "O(1)",
+        "O(1)",
+        "O(f)",
+    )
+    assert lru.hit == "O(1) average"
+    assert lru.data_structure.startswith("OrderedDict")
+    assert clock.hit == "O(1) average"
+    assert clock.fault_with_eviction == "O(f) worst case"
+    assert "hash map" in clock.data_structure
+
+
 def test_clock_rejects_eviction_that_does_not_match_hand():
     policy = CLOCKPolicy()
     policy.on_load(1)
