@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from bisect import bisect_right
 from pathlib import Path
+import re
 
 import streamlit as st
 
@@ -55,7 +56,7 @@ def _show_training_summary(summary: TrainingSummary) -> None:
 
 
 def _render_candidate_decision(
-    trace: SyntheticTrace,
+    trace_pages: tuple[int, ...],
     decisions: list[PolicyDecision],
     result: SimulationResult,
 ) -> None:
@@ -74,7 +75,7 @@ def _render_candidate_decision(
     )
     decision = decisions[decision_index]
     future_positions: dict[int, list[int]] = {}
-    for index, page in enumerate(trace.pages):
+    for index, page in enumerate(trace_pages):
         future_positions.setdefault(page, []).append(index)
 
     rows = []
@@ -120,6 +121,126 @@ def _render_candidate_decision(
         )
 
 
+def _step_back() -> None:
+    st.session_state["walkthrough_step"] = max(
+        0, st.session_state["walkthrough_step"] - 1
+    )
+
+
+def _step_forward(total_references: int) -> None:
+    st.session_state["walkthrough_step"] = min(
+        total_references - 1, st.session_state["walkthrough_step"] + 1
+    )
+
+
+def _toggle_playback() -> None:
+    st.session_state["walkthrough_playing"] = not st.session_state.get(
+        "walkthrough_playing", False
+    )
+
+
+@st.fragment(run_every="1s")
+def _render_walkthrough(
+    trace_pages: tuple[int, ...],
+    trace_label: str,
+    results: dict[str, SimulationResult],
+    trace_key: tuple[int, ...],
+) -> None:
+    if st.session_state.get("walkthrough_trace_key") != trace_key:
+        st.session_state["walkthrough_trace_key"] = trace_key
+        st.session_state["walkthrough_step"] = 0
+        st.session_state["walkthrough_playing"] = False
+
+    st.subheader("Walk through memory, one request at a time")
+    st.caption(
+        "1. Choose a trace · 2. Set frame capacity · 3. Select a policy · "
+        "4. Step through its decisions."
+    )
+    names = tuple(results)
+    selected_policy = st.selectbox(
+        "Watch policy",
+        names,
+        key="walkthrough_policy",
+        help="Choose one replacement rule and inspect its frames after each request.",
+    )
+    result = results[selected_policy]
+    total_references = len(trace_pages)
+    step = st.session_state["walkthrough_step"]
+    if st.session_state["walkthrough_playing"]:
+        if step >= total_references - 1:
+            st.session_state["walkthrough_playing"] = False
+        else:
+            step += 1
+            st.session_state["walkthrough_step"] = step
+
+    previous_column, play_column, next_column = st.columns(3)
+    previous_column.button(
+        "← Previous",
+        disabled=step == 0,
+        on_click=_step_back,
+        width="stretch",
+    )
+    play_column.button(
+        "❚❚ Pause" if st.session_state["walkthrough_playing"] else "▶ Play",
+        on_click=_toggle_playback,
+        width="stretch",
+    )
+    next_column.button(
+        "Next →",
+        disabled=step >= total_references - 1,
+        on_click=_step_forward,
+        args=(total_references,),
+        width="stretch",
+    )
+
+    selected_step = st.slider(
+        "Walkthrough step",
+        min_value=0,
+        max_value=total_references - 1,
+        key="walkthrough_step",
+        format="%d",
+    )
+    event = result.events[selected_step]
+    status = "HIT" if event.hit else "PAGE FAULT"
+    st.markdown(f"#### Reference {selected_step + 1} of {total_references}")
+    st.write(
+        f"**{status}** · Page **{event.page}** requested"
+        + (
+            f" · evicted page **{event.evicted_page}**"
+            if event.evicted_page is not None
+            else ""
+        )
+    )
+
+    frame_columns = st.columns(len(event.resident_pages) or 1)
+    for frame_index in range(max(len(event.resident_pages), 1)):
+        page = (
+            event.resident_pages[frame_index]
+            if frame_index < len(event.resident_pages)
+            else "Empty"
+        )
+        frame_columns[frame_index].metric(f"Frame {frame_index + 1}", page)
+
+    context_start = max(0, selected_step - 9)
+    context_end = min(total_references, context_start + 20)
+    timeline = []
+    for index in range(context_start, context_end):
+        timeline.append(
+            {
+                "Reference": index + 1,
+                "Page": trace_pages[index],
+                "Result": "Hit" if result.events[index].hit else "Fault",
+                "Current": index == selected_step,
+            }
+        )
+    st.dataframe(timeline, hide_index=True, width="stretch")
+    st.caption(
+        f"{trace_label} · {total_references:,} references · "
+        f"{result.hits:,} hits · {result.faults:,} faults · "
+        f"{result.fault_rate:.1%} fault rate"
+    )
+
+
 def main() -> None:
     st.set_page_config(page_title="Page Replacement Lab", page_icon="📚", layout="wide")
     st.title("Page Replacement Lab")
@@ -160,6 +281,12 @@ def main() -> None:
         model_path = Path(
             st.text_input("Model file", value="models/reuse-distance-v1.joblib")
         )
+        custom_trace_text = st.text_input(
+            "Custom page-reference trace",
+            placeholder="1, 2, 3, 1, 4, 2",
+            key="custom_trace_text",
+            help="Optional: enter comma- or space-separated page IDs to inspect your own trace.",
+        )
 
     trace = generate_trace(
         workload,
@@ -169,16 +296,30 @@ def main() -> None:
         hot_set_size=hot_set_size,
         noise_probability=noise_probability,
     )
-    st.subheader("Reference string")
-    st.code(" → ".join(map(str, trace.pages[:60])) + (" → …" if length > 60 else ""))
-    st.caption(
-        f"{trace.workload.replace('_', ' ').title()} workload · seed {trace.seed} · "
-        f"{len(trace.pages):,} references · {frame_capacity} frames"
+    trace_pages = trace.pages
+    trace_label = (
+        f"{trace.workload.replace('_', ' ').title()} workload · seed {trace.seed}"
     )
+    if custom_trace_text.strip():
+        try:
+            trace_pages = tuple(
+                int(token)
+                for token in re.split(r"[\s,]+", custom_trace_text.strip())
+                if token
+            )
+            if not trace_pages:
+                raise ValueError("enter at least one page ID")
+            if len(trace_pages) > 500:
+                raise ValueError("custom traces are limited to 500 page IDs")
+        except ValueError as error:
+            st.error(f"Invalid custom trace: {error}")
+            trace_pages = trace.pages
+        else:
+            trace_label = "Custom trace"
 
     results: dict[str, SimulationResult] = {
         name: simulate(
-            trace.pages,
+            trace_pages,
             frame_capacity,
             policy_factory(),
             record_events=True,
@@ -190,7 +331,7 @@ def main() -> None:
         try:
             learned_policy = load_model(model_path)
             ml_result = simulate(
-                trace.pages, frame_capacity, learned_policy, record_events=True
+                trace_pages, frame_capacity, learned_policy, record_events=True
             )
         except (ImportError, OSError, ValueError, RuntimeError) as error:
             st.error(f"Could not load or run the learned model: {error}")
@@ -203,7 +344,7 @@ def main() -> None:
             "Training runs only when you press the button."
         )
 
-    st.subheader("Policy comparison")
+    st.subheader("Compare the policies")
     metric_columns = st.columns(len(results))
     for column, (name, result) in zip(metric_columns, results.items()):
         column.metric(f"{name} page faults", f"{result.faults:,}")
@@ -220,34 +361,12 @@ def main() -> None:
         y="Page faults",
     )
 
-    st.subheader("Step-by-step memory state")
-    selected_reference = st.slider(
-        "Reference to inspect",
-        min_value=0,
-        max_value=len(trace.pages) - 1,
-        value=min(10, len(trace.pages) - 1),
-        key="reference_select",
-    )
-    event_rows = []
-    for name, result in results.items():
-        event = result.events[selected_reference]
-        event_rows.append(
-            {
-                "Policy": name,
-                "Page requested": event.page,
-                "Outcome": "Hit" if event.hit else "Page fault",
-                "Page evicted": (
-                    event.evicted_page if event.evicted_page is not None else "—"
-                ),
-                "Frames after access": ", ".join(map(str, event.resident_pages)),
-            }
-        )
-    st.dataframe(event_rows, hide_index=True, width="stretch")
+    _render_walkthrough(trace_pages, trace_label, results, trace_pages)
 
     if "ML" in results:
         st.subheader("Why did the learned policy evict that page?")
         decisions = st.session_state.get("ml_decisions", [])
-        _render_candidate_decision(trace, decisions, results["ML"])
+        _render_candidate_decision(trace_pages, decisions, results["ML"])
 
     with st.expander("Train or retrain the learned policy"):
         st.write(

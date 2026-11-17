@@ -1,46 +1,95 @@
 # Page Replacement Simulator
 
-A trace-driven simulator for exploring how memory page replacement affects hits, page faults, and evictions. Compare classic policies with a machine-learning policy that estimates when a resident page will be needed again.
+An interactive, trace-driven simulator that shows how operating-system page replacement policies manage a limited number of memory frames. Explore the steps of FIFO, LRU, and CLOCK, compare their page faults, and try a machine-learning policy that estimates when a page may be needed again.
 
 > This is an educational simulator. It does not modify or benchmark an operating-system memory manager.
 
-## Features
+## What the project demonstrates
 
-- Simulate FIFO, LRU, and CLOCK page replacement.
-- Generate reproducible sequential, looping, Zipf-skewed, hot-set/noise, and phase-change workloads.
-- Save and reload traces as CSV with JSON metadata.
-- Compare policies with hit/fault statistics, CSV reports, and optional plots.
-- Train a random-forest policy from causal access-history features and evaluate it on held-out traces.
-- Explore per-reference frame contents, learned eviction decisions, and model feature importances in an interactive Streamlit app.
+A program requests pages in a particular order, called a **reference string**. If the requested page is already in one of the available **memory frames**, it is a hit. Otherwise, a page fault occurs. If all frames are occupied, the replacement policy chooses a resident page to evict.
+
+The simulator makes those decisions visible one request at a time, then summarizes the hits, page faults, and evictions for each policy.
+
+### Replacement policies
+
+- **FIFO** evicts the page that has been in memory the longest.
+- **LRU** evicts the page that has not been used for the longest time.
+- **CLOCK** approximates LRU using a reference bit and a circular scan.
+- **Learned policy** uses a trained random forest to estimate how far in the future each resident page will next be requested, then evicts the page with the largest predicted distance. It is an experimental heuristic, not a guarantee of better results.
+
+## How it works
+
+1. Select a generated workload or enter a custom page-reference trace.
+2. Set the number of memory frames and choose a replacement policy.
+3. Process each page request in order. The selected policy decides which page to evict when memory is full.
+4. Inspect the resulting frame contents and hit/fault outcome, or compare aggregate results across policies.
+5. Optionally train the learned policy on synthetic traces and evaluate it on a separate workload.
 
 ## Screenshots
 
-The app compares policies on the same generated reference string and lets you inspect individual memory states:
+Compare page-fault counts across the classic policies:
 
 ![Page Replacement Lab comparing FIFO, LRU, and CLOCK](docs/screenshots/policy-comparison.png)
 
-After training a model, select an eviction decision to see its candidate features and predicted next-use distances alongside the actual future reference for explanation:
+Step through a looping workload and see the requested page, eviction, current frames, and recent trace:
+
+![Guided walkthrough showing a page fault, evicted page, and current frame contents](docs/screenshots/guided-walkthrough.png)
+
+Inspect the learned policy's candidate features and predicted next-use distances for an eviction:
 
 ![Learned replacement policy eviction explanation](docs/screenshots/learned-eviction.png)
 
-## Install
+## Get started
 
-Requires Python 3.11 or newer:
+Requires Python 3.11 or newer.
+
+From the project directory, create and activate a virtual environment, then install the project and app dependencies:
 
 ```bash
-python3.11 -m venv .venv
+python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install --upgrade pip
 python -m pip install -e ".[dev,ml,plots,app]"
 ```
 
-The `ml`, `plots`, and `app` extras are optional. For simulation and CSV output only:
+Start the Streamlit app:
 
 ```bash
-python -m pip install -e ".[dev]"
+python -m streamlit run src/page_replacement/streamlit_app.py
 ```
 
+Open [http://localhost:8501](http://localhost:8501) in your browser. Stop the app with **Ctrl+C** in the terminal.
+
+### Windows activation
+
+For PowerShell, create and activate the environment, then install the dependencies:
+
+```powershell
+py -3 -m venv .venv
+.\.venv\Scripts\Activate.ps1
+python -m pip install --upgrade pip
+python -m pip install -e ".[dev,ml,plots,app]"
+```
+
+Start the app with:
+
+```powershell
+python -m streamlit run src/page_replacement/streamlit_app.py
+```
+
+## Explore the app
+
+- Choose a reproducible workload pattern, seed, and frame capacity in the sidebar.
+- Use **Previous**, **Next**, **Play**, or the walkthrough slider to follow memory state changes.
+- Enter your own comma- or space-separated page IDs in **Custom page-reference trace** (up to 500 IDs).
+- Train a model in the app to add the learned policy to the comparison.
+- Review the learned policy's eviction candidates, historical features, and predicted next-use distances.
+
+The actual future next-use distance is displayed only to explain model predictions. It is not available to the policy while it is making an online eviction decision.
+
 ## Generate a trace and compare policies
+
+The command-line interface can generate a reproducible trace and compare policies without opening the app:
 
 ```bash
 page-replacement generate --workload hot_set_noise --length 1000 --seed 42 \
@@ -52,31 +101,11 @@ page-replacement compare --trace data/traces/hot-set.csv --frames 8 \
   --plot results/hot-set.png
 ```
 
-The generated CSV contains `reference_index,page` columns. Its same-name JSON file stores the format version, workload, seed, length, and generation parameters. The plot option requires Matplotlib; CSV reports do not.
-
-## Interactive Streamlit app
-
-```bash
-streamlit run src/page_replacement/streamlit_app.py
-```
-
-Install the `app` extra first if Streamlit is not already installed.
-Choose a workload, seed, and frame count to compare FIFO, LRU, and CLOCK. Train a model from the app to include the learned policy, inspect the frame state at any reference, and see the historical candidate features and predicted-versus-actual next-use distance behind each ML eviction. The actual future distance is displayed only as an explanation; the online policy does not use it.
-
-### Deploy to Streamlit Community Cloud
-
-The repository includes a root-level `requirements.txt` for the hosted app. To publish it:
-
-1. Push the repository to GitHub.
-2. Sign in at [share.streamlit.io](https://share.streamlit.io) with GitHub and select **Create app**.
-3. Choose repository `ankurmverse/Memory-Simulator`, branch `main`, and main file path `src/page_replacement/streamlit_app.py`.
-4. In **Advanced settings**, choose Python 3.12, then deploy.
-
-The app does not require secrets. The model trained in the dashboard is saved in the app's local runtime; hosted files are not a durable model store, so retrain after a restart or redeployment. To retain a trained model permanently, use external persistent storage or train and evaluate locally.
+The trace CSV contains `reference_index,page` columns. A same-name JSON file records the format version, workload, seed, length, and generation parameters. The plot option requires Matplotlib; CSV reports do not.
 
 ## Train and evaluate the learned policy
 
-Training and evaluation require the `ml` extra. Training defaults to several workload families and seeds. Evaluation uses a different seed by default; keep it separate from the training seeds for a meaningful held-out result.
+Training and evaluation require the `ml` extra, included in the installation command above. Training uses synthetic workload families and seeds. Evaluate on a separate seed to measure results on data not used for training:
 
 ```bash
 page-replacement train --workloads looping zipf hot_set_noise phase_change \
@@ -89,15 +118,9 @@ page-replacement evaluate --model models/reuse-distance-v1.joblib \
   --plot results/held-out.png
 ```
 
-You can evaluate an existing trace instead of generating one with `--trace path/to/trace.csv`. Compare the learned policy's held-out fault count/rate with FIFO, LRU, and CLOCK; performance depends on workload and should be reported from measured results rather than assumed.
+Training creates candidate examples at eviction decisions. Their features describe access history available at that point, including access counts, references since last access, reuse-distance statistics, and time in memory. The training target is the distance to the candidate page's next reference; pages never used again receive a target beyond the end of the trace.
 
-### What the model learns
-
-At each eviction decision, training creates one candidate row for every resident page. The features are computed from the reference history available before that decision: number of prior accesses, references since the last access, observed reuse-distance statistics, and time in memory. The training target is the distance to the candidate page's next reference; pages never referenced again in the trace receive a target beyond that trace's length.
-
-That future-derived next-use distance is a training label, not an online feature. At runtime, the model predicts a next-use distance for each resident candidate and evicts the one predicted to be needed farthest in the future. This is a learned heuristic, not a guarantee of outperforming classic policies.
-
-Training traces are generated separately from the held-out evaluation seed. For credible comparisons, evaluate multiple workloads and seeds, and do not tune the model on the reported held-out traces.
+That future-derived distance is a training label, not an online feature. At runtime, the model predicts a distance for each resident candidate and evicts the page with the largest prediction. Compare held-out fault counts across multiple workloads and seeds; performance depends on the workload.
 
 ## Python API
 
@@ -116,8 +139,14 @@ for name, policy in (
     print(name, result.hits, result.faults, result.fault_rate)
 ```
 
-## Tests
+## Run the tests
 
 ```bash
 python -m pytest
 ```
+
+## Project layout
+
+- `src/page_replacement/` — simulator, policies, trace generators, CLI, model, and Streamlit app.
+- `tests/` — tests for simulation, policies, traces, the model, CLI, and app.
+- `docs/screenshots/` — screenshots of the interactive app.
