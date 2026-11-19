@@ -10,6 +10,7 @@ An interactive, trace-driven simulator for exploring how operating-system page r
 - [Features](#features)
 - [Screenshots](#screenshots)
 - [Quick start](#quick-start)
+- [Deploy to Streamlit Community Cloud](#deploy-to-streamlit-community-cloud)
 - [Using the simulator](#using-the-simulator)
   - [Interactive dashboard](#interactive-dashboard)
   - [Command line](#command-line)
@@ -77,6 +78,17 @@ python -m pip install --upgrade pip
 python -m pip install -e ".[dev,ml,plots,app]"
 python -m streamlit run src/page_replacement/streamlit_app.py
 ```
+
+## Deploy to Streamlit Community Cloud
+
+The repository includes a root `requirements.txt` with the app and machine-learning dependencies needed by the hosted dashboard.
+
+1. Push the project to GitHub.
+2. Sign in at [Streamlit Community Cloud](https://share.streamlit.io/) with GitHub and select **Create app**.
+3. Choose this repository, the `main` branch, and `src/page_replacement/streamlit_app.py` as the app's main file.
+4. Deploy the app. Community Cloud will install the dependencies from `requirements.txt` and provide a shareable URL.
+
+The app does not need secrets for normal use. After deployment, pushes to the selected branch update the app.
 
 ## Using the simulator
 
