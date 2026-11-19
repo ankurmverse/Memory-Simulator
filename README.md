@@ -1,29 +1,38 @@
 # Page Replacement Simulator
 
-An interactive, trace-driven simulator that shows how operating-system page replacement policies manage a limited number of memory frames. Explore the steps of FIFO, LRU, and CLOCK, compare their page faults, and try a machine-learning policy that estimates when a page may be needed again.
+An interactive, trace-driven simulator for exploring how operating-system page replacement policies manage limited memory. Step through FIFO, LRU, and CLOCK, compare page faults, and experiment with a machine-learning policy that predicts which page will be needed furthest in the future.
 
 > This is an educational simulator. It does not modify or benchmark an operating-system memory manager.
 
-## What the project demonstrates
+## Contents
 
-A program requests pages in a particular order, called a **reference string**. If the requested page is already in one of the available **memory frames**, it is a hit. Otherwise, a page fault occurs. If all frames are occupied, the replacement policy chooses a resident page to evict.
+- [Overview](#overview)
+- [Features](#features)
+- [Screenshots](#screenshots)
+- [Quick start](#quick-start)
+- [Using the simulator](#using-the-simulator)
+  - [Interactive dashboard](#interactive-dashboard)
+  - [Command line](#command-line)
+  - [Python API](#python-api)
+- [Policy behavior and complexity](#policy-behavior-and-complexity)
+- [Learned policy](#learned-policy)
+- [Run tests](#run-tests)
+- [Project layout](#project-layout)
 
-The simulator makes those decisions visible one request at a time, then summarizes the hits, page faults, and evictions for each policy. It also compares how policy behavior changes as memory capacity grows and explains the underlying algorithmic costs.
+## Overview
 
-### Replacement policies
+A program requests pages in a particular order, called a **reference string**. If a requested page is already in one of the available **memory frames**, it is a hit. Otherwise, a page fault occurs. When all frames are occupied, the replacement policy selects a resident page to evict.
 
-- **FIFO** evicts the page that has been in memory the longest.
-- **LRU** evicts the page that has not been used for the longest time.
-- **CLOCK** approximates LRU using a reference bit and a circular scan.
-- **Learned policy** uses a trained random forest to estimate how far in the future each resident page will next be requested, then evicts the page with the largest predicted distance. It is an experimental heuristic, not a guarantee of better results.
+This project makes those decisions visible step by step, reports hits, faults, and evictions, and shows how results change with different policies and memory capacities.
 
-## How it works
+## Features
 
-1. Select a generated workload or enter a custom page-reference trace.
-2. Set the number of memory frames and choose a replacement policy.
-3. Process each page request in order. The selected policy decides which page to evict when memory is full.
-4. Inspect the resulting frame contents and hit/fault outcome, or compare aggregate results across policies.
-5. Optionally train the learned policy on synthetic traces and evaluate it on a separate workload.
+- **Interactive walkthrough:** inspect each page request, frame state, hit or fault, and eviction.
+- **Classic replacement algorithms:** compare FIFO, LRU, and CLOCK.
+- **Reproducible workloads:** generate traces from built-in workload patterns using a chosen seed, or provide a custom trace.
+- **Capacity analysis:** compare page-fault counts as the number of frames changes. A classic FIFO example demonstrates Belady's anomaly.
+- **Learned replacement policy:** train a random forest on synthetic traces and inspect candidate features and predicted next-use distances.
+- **Command-line and Python interfaces:** generate traces, run comparisons, train and evaluate the model, or use the simulator from Python.
 
 ## Screenshots
 
@@ -43,72 +52,48 @@ Explore capacity sensitivity, FIFO's Belady's anomaly, and the algorithmic trade
 
 ![Memory-capacity sweep and policy complexity comparison](docs/screenshots/capacity-analysis.png)
 
-## Get started
+## Quick start
 
 Requires Python 3.11 or newer.
 
-From the project directory, create and activate a virtual environment, then install the project and app dependencies:
+Create and activate a virtual environment, install the app and project extras, then launch the dashboard:
 
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
 python -m pip install --upgrade pip
 python -m pip install -e ".[dev,ml,plots,app]"
-```
-
-Start the Streamlit app:
-
-```bash
 python -m streamlit run src/page_replacement/streamlit_app.py
 ```
 
 Open [http://localhost:8501](http://localhost:8501) in your browser. Stop the app with **Ctrl+C** in the terminal.
 
-### Windows activation
-
-For PowerShell, create and activate the environment, then install the dependencies:
+### Windows (PowerShell)
 
 ```powershell
 py -3 -m venv .venv
 .\.venv\Scripts\Activate.ps1
 python -m pip install --upgrade pip
 python -m pip install -e ".[dev,ml,plots,app]"
-```
-
-Start the app with:
-
-```powershell
 python -m streamlit run src/page_replacement/streamlit_app.py
 ```
 
-## Explore the app
+## Using the simulator
 
-- Choose a reproducible workload pattern, seed, and frame capacity in the sidebar.
+### Interactive dashboard
+
+- Choose a workload pattern, seed, and frame capacity in the sidebar.
 - Use **Previous**, **Next**, **Play**, or the walkthrough slider to follow memory state changes.
-- Enter your own comma- or space-separated page IDs in **Custom page-reference trace** (up to 500 IDs).
-- Train a model in the app to add the learned policy to the comparison.
-- Review the learned policy's eviction candidates, historical features, and predicted next-use distances.
-- Use **Memory-capacity what-if** to compare page faults across frame counts. The classic trace `1, 2, 3, 4, 1, 2, 5, 1, 2, 3, 4, 5` demonstrates Belady's anomaly in FIFO: 9 faults with 3 frames and 10 with 4.
-- Review **Algorithm and system trade-offs** for each policy's hit/miss complexity, extra space, underlying data structure, and practical trade-off.
+- Enter comma- or space-separated page IDs in **Custom page-reference trace** (up to 500 IDs).
+- Train a model in the app to include the learned policy in the comparison.
+- Review **Memory-capacity what-if** to compare page faults as frame count changes.
+- Review **Algorithm and system trade-offs** for each policy's complexity, data structures, and practical trade-offs.
 
 The actual future next-use distance is displayed only to explain model predictions. It is not available to the policy while it is making an online eviction decision.
 
-### Complexity and interpretation
+### Command line
 
-Let `f` be the number of frames, `u` the number of distinct pages seen, and `e` the number of learned-policy eviction decisions. The policy complexity panel describes the data structures and average-case hash-table costs; learned-policy inference also depends on the trained forest. These are asymptotic costs, not wall-clock benchmarks. The simulator's resident-list updates, validation, and optional event recording add overhead, so benchmark runtime separately before making performance claims.
-
-| Policy | Hit | Fault with full memory | Policy state |
-| --- | --- | --- | --- |
-| FIFO | `O(1)` | `O(1)` | `O(f)` deque |
-| LRU | `O(1)` average | `O(1)` average | `O(f)` ordered hash map |
-| CLOCK | `O(1)` average | `O(f)` worst case | `O(f)` circular arrays and page-index map |
-| Learned | `O(1)` average | `O(f × model prediction)` | `O(u + f + e × f + model size)` |
-
-CLOCK trades a potentially linear scan for lower recency bookkeeping than exact LRU. FIFO and LRU use constant-time policy operations here, while the simulator itself still updates a Python resident list on eviction.
-
-## Generate a trace and compare policies
-
-The command-line interface can generate a reproducible trace and compare policies without opening the app:
+Generate a reproducible trace and compare policies without opening the dashboard:
 
 ```bash
 page-replacement generate --workload hot_set_noise --length 1000 --seed 42 \
@@ -122,26 +107,7 @@ page-replacement compare --trace data/traces/hot-set.csv --frames 8 \
 
 The trace CSV contains `reference_index,page` columns. A same-name JSON file records the format version, workload, seed, length, and generation parameters. The plot option requires Matplotlib; CSV reports do not.
 
-## Train and evaluate the learned policy
-
-Training and evaluation require the `ml` extra, included in the installation command above. Training uses synthetic workload families and seeds. Evaluate on a separate seed to measure results on data not used for training:
-
-```bash
-page-replacement train --workloads looping zipf hot_set_noise phase_change \
-  --seeds 0 1 2 3 --length 2000 --working-set-size 16 --frames 4 \
-  --model models/reuse-distance-v1.joblib
-
-page-replacement evaluate --model models/reuse-distance-v1.joblib \
-  --workload hot_set_noise --seed 100 --length 2000 \
-  --working-set-size 16 --frames 4 --csv results/held-out.csv \
-  --plot results/held-out.png
-```
-
-Training creates candidate examples at eviction decisions. Their features describe access history available at that point, including access counts, references since last access, reuse-distance statistics, and time in memory. The training target is the distance to the candidate page's next reference; pages never used again receive a target beyond the end of the trace.
-
-That future-derived distance is a training label, not an online feature. At runtime, the model predicts a distance for each resident candidate and evicts the page with the largest prediction. Compare held-out fault counts across multiple workloads and seeds; performance depends on the workload.
-
-## Python API
+### Python API
 
 ```python
 from page_replacement.policies import CLOCKPolicy, FIFOPolicy, LRUPolicy
@@ -158,7 +124,46 @@ for name, policy in (
     print(name, result.hits, result.faults, result.fault_rate)
 ```
 
-## Run the tests
+## Policy behavior and complexity
+
+- **FIFO** evicts the page that has been in memory the longest.
+- **LRU** evicts the page that has not been used for the longest time.
+- **CLOCK** approximates LRU using a reference bit and a circular scan.
+- **Learned policy** predicts the next-use distance for each resident page and evicts the page with the largest predicted distance. It is an experimental heuristic, not a guarantee of better results.
+
+The table describes policy bookkeeping, not end-to-end simulator runtime. Let `f` be the number of frames, `u` the number of distinct pages seen, and `e` the number of learned-policy eviction decisions. Hash-table operations are average-case; learned-policy inference also depends on the trained forest.
+
+| Policy | Hit | Fault with full memory | Policy state |
+| --- | --- | --- | --- |
+| FIFO | `O(1)` | `O(1)` | `O(f)` deque |
+| LRU | `O(1)` average | `O(1)` average | `O(f)` ordered hash map |
+| CLOCK | `O(1)` average | `O(f)` worst case | `O(f)` circular arrays and page-index map |
+| Learned | `O(1)` average | `O(f × model prediction)` | `O(u + f + e × f + model size)` |
+
+CLOCK trades a potentially linear scan for less recency bookkeeping than exact LRU. FIFO and LRU use constant-time policy operations here, while the simulator itself still updates a Python resident list on eviction. Validation and optional event recording also add overhead, so benchmark runtime separately before making performance claims.
+
+The trace `1, 2, 3, 4, 1, 2, 5, 1, 2, 3, 4, 5` produces 9 FIFO faults with 3 frames and 10 with 4 frames, demonstrating **Belady's anomaly**: adding a frame can increase FIFO's fault count.
+
+## Learned policy
+
+Training and evaluation require the `ml` extra, included in the installation command above. Training uses synthetic workload families and seeds. Evaluate on a separate seed to measure results on data not used for training:
+
+```bash
+page-replacement train --workloads looping zipf hot_set_noise phase_change \
+  --seeds 0 1 2 3 --length 2000 --working-set-size 16 --frames 4 \
+  --model models/reuse-distance-v1.joblib
+
+page-replacement evaluate --model models/reuse-distance-v1.joblib \
+  --workload hot_set_noise --seed 100 --length 2000 \
+  --working-set-size 16 --frames 4 --csv results/held-out.csv \
+  --plot results/held-out.png
+```
+
+Training creates candidate examples at eviction decisions. Their features describe access history available at that point, including access counts, references since last access, reuse-distance statistics, and time in memory. The training target is the distance to the candidate page's next reference; pages never used again receive a target beyond the end of the trace.
+
+That future-derived distance is a training label, not an online feature. At runtime, the model predicts a distance for each resident candidate and evicts the page with the largest prediction. Results depend on the workload, so compare fault counts across multiple held-out workloads and seeds.
+
+## Run tests
 
 ```bash
 python -m pytest
